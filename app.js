@@ -31,43 +31,47 @@ const STAFF = [
   { id:22, pin:"50", name:"瀬口 加奈",   store:"honten", av:"瀬" },
 ];
 
+const TRAINEES = ["15","16","17","18","19","20","21"]; // pins: 末永,益,梶木,山口,加藤,沼澤,澤田
+// 教育対象スタッフ（pin）
+const EDU_STAFF = [
+  { pin:"16", name:"山口 大輝",   store:"honten" },
+  { pin:"17", name:"加藤 留那",   store:"honten" },
+  { pin:"18", name:"沼澤 杏奈",   store:"honten" },
+  { pin:"19", name:"澤田 摩里茄", store:"honten" },
+  { pin:"15", name:"末永 咲希",   store:"tuelu"  },
+  { pin:"20", name:"益 英一郎",   store:"tuelu"  },
+  { pin:"21", name:"梶木 勇吾",   store:"tuelu"  },
+];
+
 const fmt = n => n > 0 ? "¥" + Number(n).toLocaleString() : "¥0";
 const getStore = id => STORES.find(s => s.id === id);
 const DOW = ["日","月","火","水","木","金","土"];
 const today = new Date();
 const todayStr = `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日（${DOW[today.getDay()]}）`;
 
-const STORAGE_SALES = 'diptyMOILA_sales';
-const STORAGE_DAILY = 'diptyMOILA_daily';
+const STORAGE_SALES  = 'diptyMOILA_sales';
+const STORAGE_DAILY  = 'diptyMOILA_daily';
+const STORAGE_EDU    = 'diptyMOILA_edu';
 
 const defaultSales = () => {
   const d = {};
-  STAFF.forEach(s => { d[s.pin] = { total:0, gijutsu:0, shohin:0, shinki:0, rairai:0, kotei:0, target:500000 }; });
+  STAFF.forEach(s => { d[s.pin] = { total:0, gijutsu:0, shohin:0, gijutsu_clients:0, shohin_clients:0, shinki:0, rairai:0, kotei:0, gobusata:0, target:500000 }; });
   return d;
 };
 
-const loadSales = () => {
-  try { const s = localStorage.getItem(STORAGE_SALES); if(s) return JSON.parse(s); } catch(e){}
-  return defaultSales();
-};
+const loadSales = () => { try { const s = localStorage.getItem(STORAGE_SALES); if(s) return JSON.parse(s); } catch(e){} return defaultSales(); };
 const saveSales = d => { try { localStorage.setItem(STORAGE_SALES, JSON.stringify(d)); } catch(e){} };
-
-const loadDaily = () => {
-  try { const s = localStorage.getItem(STORAGE_DAILY); if(s) return JSON.parse(s); } catch(e){}
-  return genDailyDefault();
-};
-const saveDaily = d => { try { localStorage.setItem(STORAGE_DAILY, JSON.stringify(d)); } catch(e){} };
 
 const genDailyDefault = () => {
   const d = {};
-  STAFF.forEach(s => {
-    d[s.pin] = { instaTarget:20, instaCurrent:0, remaining:0, newClients:0,
-      hotpepper:0, instagram:0, referral:0, lp:0,
-      nextShinki_in:0, nextShinki_out:0, nextRairai_in:0, nextRairai_out:0,
-      nextKotei_in:0, nextKotei_out:0, shop_in:0, shop_out:0, saved:false };
-  });
+  STAFF.forEach(s => { d[s.pin] = { instaTarget:20, instaCurrent:0, remaining:0, newClients:0, hotpepper:0, instagram:0, referral:0, lp:0, saved:false }; });
   return d;
 };
+const loadDaily = () => { try { const s = localStorage.getItem(STORAGE_DAILY); if(s) return JSON.parse(s); } catch(e){} return genDailyDefault(); };
+const saveDaily = d => { try { localStorage.setItem(STORAGE_DAILY, JSON.stringify(d)); } catch(e){} };
+
+const loadEdu = () => { try { const s = localStorage.getItem(STORAGE_EDU); if(s) return JSON.parse(s); } catch(e){} return {}; };
+const saveEdu = d => { try { localStorage.setItem(STORAGE_EDU, JSON.stringify(d)); } catch(e){} };
 
 const parseCSVData = (text) => {
   const lines = text.split('\n');
@@ -99,26 +103,30 @@ const parseCSVData = (text) => {
       newData[currentPin].shohin  = n(8) + n(10);
       if (qtyRow) {
         const q = i => parseInt((qtyRow[i]||'').replace(/[,\s]/g,'')) || 0;
-        newData[currentPin].shinki = q(13);
-        newData[currentPin].rairai = q(14);
-        newData[currentPin].kotei  = q(15);
+        newData[currentPin].gijutsu_clients = q(7) + q(9);
+        newData[currentPin].shohin_clients  = q(8) + q(10);
+        newData[currentPin].shinki   = q(13);
+        newData[currentPin].rairai   = q(14);
+        newData[currentPin].kotei    = q(15);
+        newData[currentPin].gobusata = q(16) || 0;
       }
-      // targetは既存を維持
       const existing = loadSales();
       if (existing[currentPin]?.target) newData[currentPin].target = existing[currentPin].target;
-      currentPin = null;
-      qtyRow = null;
+      currentPin = null; qtyRow = null;
     }
   });
   return newData;
 };
 
 let SALES_DATA = loadSales();
-let dailyData = loadDaily();
+let dailyData  = loadDaily();
+let eduData    = loadEdu();
 let currentUser = null;
 let currentTab = 'daily';
 let currentStore = null;
 let currentStaffPin = null;
+let currentEduPin = null;
+let currentEduMonth = new Date();
 
 function el(tag, props, ...children) {
   const e = document.createElement(tag);
@@ -141,13 +149,12 @@ function render() {
 function renderLogin() {
   let pinInput = '';
   const wrap = el('div', { style: { minHeight:'100vh', background:'#1A1A2E', display:'flex', alignItems:'center', justifyContent:'center', padding:'20px' }});
-  const box = el('div', { style: { background:'#fff', borderRadius:'20px', padding:'40px 32px', width:'100%', maxWidth:'340px', display:'flex', flexDirection:'column', alignItems:'center', gap:'16px' }});
+  const box  = el('div', { style: { background:'#fff', borderRadius:'20px', padding:'40px 32px', width:'100%', maxWidth:'340px', display:'flex', flexDirection:'column', alignItems:'center', gap:'16px' }});
   box.appendChild(el('div', { style: { fontFamily:'"DM Serif Display",serif', fontSize:'32px', textAlign:'center', letterSpacing:'0.08em' }}, 'dipty', el('em', { style: { color:'#7B61FF' }}, 'MOILA')));
   box.appendChild(el('div', { style: { fontSize:'11px', color:'#A0A0B0', textAlign:'center', letterSpacing:'0.15em' }}, '南船場グループ 管理システム'));
   const display = el('div', { style: { fontSize:'36px', fontFamily:'"DM Serif Display",serif', letterSpacing:'0.4em', color:'#1A1A2E', minHeight:'56px', textAlign:'center', width:'100%', padding:'12px', background:'#F7F7F9', borderRadius:'12px', border:'1.5px solid #EBEBEF' }}, '—');
-  const errMsg = el('div', { style: { fontSize:'12px', color:'#E8537A', minHeight:'18px', textAlign:'center' }}, '');
-  box.appendChild(display);
-  box.appendChild(errMsg);
+  const errMsg  = el('div', { style: { fontSize:'12px', color:'#E8537A', minHeight:'18px', textAlign:'center' }}, '');
+  box.appendChild(display); box.appendChild(errMsg);
   const keypad = el('div', { style: { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'10px', width:'100%' }});
   ['1','2','3','4','5','6','7','8','9','','0','⌫'].forEach(k => {
     if (!k) { keypad.appendChild(el('div',{})); return; }
@@ -177,24 +184,24 @@ function renderLogin() {
 function renderApp() {
   const st = getStore(currentUser.store);
   const TABS = [
-    {key:'daily',icon:'✏️',label:'日報'},
-    {key:'sales',icon:'📊',label:'売上'},
-    {key:'analytics',icon:'📈',label:'分析'},
-    {key:'shift',icon:'📅',label:'シフト'},
-    {key:'profile',icon:'👤',label:'マイページ'},
+    {key:'daily',    icon:'✏️', label:'日報'},
+    {key:'sales',    icon:'📊', label:'売上'},
+    {key:'edu',      icon:'📚', label:'教育'},
+    {key:'shift',    icon:'📅', label:'シフト'},
+    {key:'profile',  icon:'👤', label:'マイページ'},
   ];
-  const titles = {daily:'日報',sales:'売上',analytics:'スタッフ分析',shift:'シフト管理',profile:'マイページ'};
+  const titles = {daily:'日報', sales:'売上', edu:'教育', shift:'シフト管理', profile:'マイページ'};
   const content = el('div', { style: { flex:'1', padding:'16px 16px 80px', overflowY:'auto' }});
   content.appendChild(el('div', { style: { fontFamily:'"DM Serif Display",serif', fontSize:'22px', color:'#1A1A2E', marginBottom:'16px' }}, titles[currentTab]));
-  if (currentTab==='daily') content.appendChild(renderDaily());
-  else if (currentTab==='sales') content.appendChild(renderSales());
-  else if (currentTab==='analytics') content.appendChild(renderAnalytics());
-  else if (currentTab==='shift') content.appendChild(renderShift());
+  if (currentTab==='daily')   content.appendChild(renderDaily());
+  else if (currentTab==='sales')   content.appendChild(renderSales());
+  else if (currentTab==='edu')     content.appendChild(renderEdu());
+  else if (currentTab==='shift')   content.appendChild(renderShift());
   else if (currentTab==='profile') content.appendChild(renderProfile());
   const nav = el('nav', { style: { display:'flex', background:'#fff', borderTop:'1px solid #EBEBEF', position:'fixed', bottom:'0', left:'50%', transform:'translateX(-50%)', width:'100%', maxWidth:'430px', zIndex:'100' }});
   TABS.forEach(t => nav.appendChild(el('button', {
     style: { flex:'1', padding:'10px 2px 8px', display:'flex', flexDirection:'column', alignItems:'center', gap:'3px', cursor:'pointer', border:'none', background:'none', color:currentTab===t.key?'#7B61FF':'#A0A0B0', fontSize:'7.5px', borderTop:`2.5px solid ${currentTab===t.key?'#7B61FF':'transparent'}` },
-    onclick: () => { currentTab=t.key; currentStore=null; currentStaffPin=null; render(); }
+    onclick: () => { currentTab=t.key; currentStore=null; currentStaffPin=null; currentEduPin=null; render(); }
   }, el('span',{style:{fontSize:'18px'}},t.icon), t.label)));
   return el('div', { style: { display:'flex', flexDirection:'column', minHeight:'100vh', maxWidth:'430px', margin:'0 auto', background:'#F7F7F9' }},
     el('div', { style: { padding:'16px 20px 12px', background:'#fff', borderBottom:'1px solid #EBEBEF', position:'sticky', top:'0', zIndex:'100' }},
@@ -248,6 +255,13 @@ function stepper(val, onChange) {
   );
 }
 
+function statBox(label, value, color) {
+  return el('div', { style: { background:'#fff', border:'1px solid #EBEBEF', borderRadius:'14px', padding:'14px', textAlign:'center' }},
+    el('div', { style: { fontSize:'10px', color:'#A0A0B0', marginBottom:'4px' }}, label),
+    el('div', { style: { fontFamily:'"DM Serif Display",serif', fontSize:'20px', color: color||'#1A1A2E' }}, value)
+  );
+}
+
 function renderDaily() {
   const wrap = el('div',{});
   if (currentStaffPin) {
@@ -287,7 +301,7 @@ function renderDaily() {
           const [label,field]=s.split(':');
           return el('div',{style:{background:'#F7F7F9',border:'1px solid #EBEBEF',borderRadius:'12px',padding:'12px'}},
             el('div',{style:{fontSize:'11px',color:'#6B6B80',marginBottom:'8px'}},label),
-            stepper(d[field],v=>{d[field]=v;})
+            stepper(d[field]||0,v=>{d[field]=v;})
           );
         })
       )
@@ -304,7 +318,7 @@ function renderDaily() {
     wrap.appendChild(breadcrumb([{label:'← 店舗',onClick:()=>{currentStore=null;render();}},{label:st.name}]));
     const grid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px'}});
     members.forEach(m=>{
-      const d = dailyData[m.pin] || {};
+      const d = dailyData[m.pin]||{};
       grid.appendChild(el('div',{
         style:{background:'#fff',border:`2px solid ${d.saved?st.color+'55':'#EBEBEF'}`,borderRadius:'14px',padding:'14px 8px',cursor:'pointer',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'},
         onclick:()=>{currentStaffPin=m.pin;render();}
@@ -327,85 +341,124 @@ function renderDaily() {
 function renderSales() {
   const wrap = el('div',{});
 
-  // オーナー/マネージャーのみCSVアップロード表示
-  if (true) {
-    const csvSection = card([
-      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px',paddingBottom:'10px',borderBottom:'1.5px solid #EBEBEF'}},'📂 POSデータ取り込み'),
-      el('div',{style:{fontSize:'12px',color:'#A0A0B0',marginBottom:'10px'}},'POSシステムのCSVデータを貼り付けてください'),
-      el('textarea',{
-        style:{width:'100%',height:'120px',padding:'10px',border:'1.5px solid #EBEBEF',borderRadius:'10px',fontSize:'11px',resize:'vertical',fontFamily:'monospace'},
-        placeholder:'ここにCSVデータを貼り付け...',
-        id:'csv-input'
-      }),
-      el('button',{
-        style:{width:'100%',padding:'12px',background:'#7B61FF',color:'#fff',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',marginTop:'8px'},
-        onclick:()=>{
-          const text = document.getElementById('csv-input').value;
-          if (!text.trim()) return;
-          const newData = parseCSVData(text);
-          SALES_DATA = newData;
-          saveSales(newData);
-          document.getElementById('csv-input').value = '';
-          alert('✓ データを取り込みました！');
-          render();
-        }
-      },'取り込む')
-    ]);
-    wrap.appendChild(csvSection);
-  }
+  // CSV取り込み
+  wrap.appendChild(card([
+    el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px',paddingBottom:'10px',borderBottom:'1.5px solid #EBEBEF'}},'📂 POSデータ取り込み'),
+    el('textarea',{
+      style:{width:'100%',height:'100px',padding:'10px',border:'1.5px solid #EBEBEF',borderRadius:'10px',fontSize:'11px',resize:'vertical',fontFamily:'monospace',boxSizing:'border-box'},
+      placeholder:'ここにCSVデータを貼り付け...',
+      id:'csv-input'
+    }),
+    el('button',{
+      style:{width:'100%',padding:'12px',background:'#7B61FF',color:'#fff',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',marginTop:'8px'},
+      onclick:()=>{
+        const text = document.getElementById('csv-input').value;
+        if (!text.trim()) return;
+        SALES_DATA = parseCSVData(text);
+        saveSales(SALES_DATA);
+        document.getElementById('csv-input').value='';
+        alert('✓ データを取り込みました！');
+        render();
+      }
+    },'取り込む')
+  ]));
 
   if (currentStaffPin) {
     const member = STAFF.find(s=>s.pin===currentStaffPin);
     const st = getStore(member.store);
-    const d = SALES_DATA[currentStaffPin] || {total:0,gijutsu:0,shohin:0,shinki:0,rairai:0,kotei:0,target:500000};
-    const clientTotal = d.shinki+d.rairai+d.kotei;
+    const d = SALES_DATA[currentStaffPin]||{total:0,gijutsu:0,shohin:0,gijutsu_clients:0,shohin_clients:0,shinki:0,rairai:0,kotei:0,gobusata:0,target:500000};
+    const totalClients = d.shinki+d.rairai+d.kotei+(d.gobusata||0);
     const pct = d.target>0?Math.round(d.total/d.target*100):0;
+    const tankaTotalStr = totalClients>0 ? fmt(Math.round(d.total/totalClients)) : '—';
+    const tankaGijutsuStr = d.gijutsu_clients>0 ? fmt(Math.round(d.gijutsu/d.gijutsu_clients)) : '—';
+    const tankaShohinStr = d.shohin_clients>0 ? fmt(Math.round(d.shohin/d.shohin_clients)) : '—';
+    const shopRate = totalClients>0 ? Math.round((d.shohin_clients||0)/totalClients*100) : 0;
+
     wrap.appendChild(breadcrumb([
       {label:'← 店舗',onClick:()=>{currentStore=null;currentStaffPin=null;render();}},
       {label:st.name,onClick:()=>{currentStaffPin=null;render();}},
       {label:member.name.split(' ')[0]}
     ]));
-    wrap.appendChild(el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px',marginBottom:'12px'}},
-      el('div',{style:{background:'#fff',border:'1px solid #EBEBEF',borderRadius:'14px',padding:'16px',textAlign:'center'}},
-        el('div',{style:{fontSize:'10px',color:'#A0A0B0',marginBottom:'4px'}},'月次売上'),
-        el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'22px',color:st.color}},fmt(d.total))
-      ),
-      el('div',{style:{background:'#fff',border:'1px solid #EBEBEF',borderRadius:'14px',padding:'16px',textAlign:'center'}},
-        el('div',{style:{fontSize:'10px',color:'#A0A0B0',marginBottom:'4px'}},'達成率'),
-        el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'22px',color:pct>=100?'#3DBD8A':'#F5A623'}},`${pct}%`)
-      )
-    ));
+
+    // 売上
     wrap.appendChild(card([
-      el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginBottom:'8px'}},'目標達成率'),
+      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'💰 売上'),
+      el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px'}},
+        statBox('総売上', fmt(d.total), st.color),
+        statBox('技術売上', fmt(d.gijutsu), '#7B61FF'),
+        statBox('店販売上', fmt(d.shohin), '#3DBD8A')
+      )
+    ]));
+
+    // 達成率
+    wrap.appendChild(card([
+      el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginBottom:'8px'}},`目標達成率 — 目標 ${fmt(d.target)}`),
       el('div',{style:{height:'10px',background:'#F7F7F9',borderRadius:'5px',overflow:'hidden'}},
         el('div',{style:{height:'100%',width:`${Math.min(pct,100)}%`,background:pct>=100?'#3DBD8A':st.color,borderRadius:'5px'}})
       ),
-      el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginTop:'6px'}},`目標 ${fmt(d.target)}`)
+      el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'28px',color:pct>=100?'#3DBD8A':'#F5A623',marginTop:'6px'}},`${pct}%`)
     ]));
-    if (clientTotal > 0) {
-      wrap.appendChild(card([
-        el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginBottom:'12px'}},'客数内訳'),
-        ...[{label:'新規',val:d.shinki,color:'#E8537A'},{label:'再来',val:d.rairai,color:'#F5A623'},{label:'固定',val:d.kotei,color:'#7B61FF'}].map(item=>{
-          const p=clientTotal>0?Math.round(item.val/clientTotal*100):0;
-          return el('div',{style:{marginBottom:'12px'}},
-            el('div',{style:{display:'flex',justifyContent:'space-between',fontSize:'12px',marginBottom:'5px'}},
-              el('span',{style:{fontWeight:'600',color:item.color}},item.label),
-              el('span',{style:{color:'#A0A0B0'}},`${item.val}名 (${p}%)`)
-            ),
-            el('div',{style:{height:'8px',background:'#F7F7F9',borderRadius:'4px',overflow:'hidden'}},
-              el('div',{style:{height:'100%',width:`${p}%`,background:item.color,borderRadius:'4px'}})
-            )
-          );
-        })
-      ]));
-    }
+
+    // 単価
+    wrap.appendChild(card([
+      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'📐 単価'),
+      el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px'}},
+        statBox('総単価', tankaTotalStr, '#1A1A2E'),
+        statBox('技術単価', tankaGijutsuStr, '#7B61FF'),
+        statBox('商品単価', tankaShohinStr, '#3DBD8A')
+      )
+    ]));
+
+    // 客数
+    wrap.appendChild(card([
+      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'👥 客数'),
+      el('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px',marginBottom:'8px'}},
+        statBox('総客数', String(totalClients), '#1A1A2E'),
+        statBox('技術客数', String(d.gijutsu_clients||0), '#7B61FF'),
+        statBox('店販客数', String(d.shohin_clients||0), '#3DBD8A')
+      ),
+      el('div',{style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'8px'}},
+        statBox('新規', String(d.shinki||0), '#E8537A'),
+        statBox('再来', String(d.rairai||0), '#F5A623'),
+        statBox('固定', String(d.kotei||0), '#7B61FF'),
+        statBox('ごぶさた', String(d.gobusata||0), '#A0A0B0')
+      )
+    ]));
+
+    // 店販購買率
+    wrap.appendChild(card([
+      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'8px'}},'🛍️ 店販購買率'),
+      el('div',{style:{display:'flex',alignItems:'baseline',gap:'4px'}},
+        el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'48px',color:'#3DBD8A',lineHeight:'1'}},String(shopRate)),
+        el('div',{style:{fontSize:'18px',color:'#3DBD8A'}},'%')
+      ),
+      el('div',{style:{height:'8px',background:'#F7F7F9',borderRadius:'4px',overflow:'hidden',marginTop:'8px'}},
+        el('div',{style:{height:'100%',width:`${shopRate}%`,background:'linear-gradient(90deg,#3DBD8A,#7BE8C0)',borderRadius:'4px'}})
+      ),
+      el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginTop:'6px'}},`店販客数 ${d.shohin_clients||0}名 ÷ 総客数 ${totalClients}名`)
+    ]));
+
     return wrap;
   }
 
   if (currentStore) {
     const st = getStore(currentStore);
     const members = STAFF.filter(s=>s.store===currentStore);
+    const storeTotal = members.reduce((a,m)=>a+(SALES_DATA[m.pin]?.total||0),0);
+    const storeGijutsu = members.reduce((a,m)=>a+(SALES_DATA[m.pin]?.gijutsu||0),0);
+    const storeShohin = members.reduce((a,m)=>a+(SALES_DATA[m.pin]?.shohin||0),0);
+
     wrap.appendChild(breadcrumb([{label:'← 店舗',onClick:()=>{currentStore=null;render();}},{label:st.name}]));
+
+    wrap.appendChild(card([
+      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'💰 店舗売上'),
+      el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px'}},
+        statBox('総売上', fmt(storeTotal), st.color),
+        statBox('技術売上', fmt(storeGijutsu), '#7B61FF'),
+        statBox('店販売上', fmt(storeShohin), '#3DBD8A')
+      )
+    ]));
+
     const list = el('div',{style:{background:'#fff',border:'1px solid #EBEBEF',borderRadius:'16px',overflow:'hidden'}});
     members.forEach(m=>{
       const d=SALES_DATA[m.pin]||{total:0,target:500000};
@@ -414,7 +467,7 @@ function renderSales() {
         el('div',{style:{width:'36px',height:'36px',borderRadius:'50%',background:st.color+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'13px',fontWeight:'700',color:st.color,marginRight:'10px'}},m.av),
         el('div',{style:{flex:'1'}},
           el('div',{style:{fontSize:'13px',fontWeight:'600'}},m.name),
-          el('div',{style:{fontSize:'10px',color:'#A0A0B0'}},`客数 ${(SALES_DATA[m.pin]?.shinki||0)+(SALES_DATA[m.pin]?.rairai||0)+(SALES_DATA[m.pin]?.kotei||0)}名`)
+          el('div',{style:{fontSize:'10px',color:'#A0A0B0'}},`客数 ${(d.shinki||0)+(d.rairai||0)+(d.kotei||0)+(d.gobusata||0)}名`)
         ),
         el('div',{style:{textAlign:'right',marginRight:'8px'}},
           el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'16px'}},fmt(d.total)),
@@ -427,75 +480,140 @@ function renderSales() {
     return wrap;
   }
 
-  const totalAll = STAFF.reduce((a,s)=>a+(SALES_DATA[s.pin]?.total||0),0);
-  const targetAll = STAFF.reduce((a,s)=>a+(SALES_DATA[s.pin]?.target||500000),0);
+  const totalAll   = STAFF.reduce((a,s)=>a+(SALES_DATA[s.pin]?.total||0),0);
+  const gijutsuAll = STAFF.reduce((a,s)=>a+(SALES_DATA[s.pin]?.gijutsu||0),0);
+  const shohinAll  = STAFF.reduce((a,s)=>a+(SALES_DATA[s.pin]?.shohin||0),0);
+  const targetAll  = STAFF.reduce((a,s)=>a+(SALES_DATA[s.pin]?.target||500000),0);
   const pctAll = targetAll>0?Math.round(totalAll/targetAll*100):0;
-  wrap.appendChild(el('div',{style:{background:'#fff',border:'1px solid #EBEBEF',borderRadius:'14px',padding:'18px',marginBottom:'12px',position:'relative',overflow:'hidden'}},
-    el('div',{style:{position:'absolute',top:'0',left:'0',right:'0',height:'3px',background:'#7B61FF'}}),
-    el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginBottom:'8px'}},'全社月次売上'),
-    el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'32px',marginBottom:'8px'}},fmt(totalAll)),
+
+  wrap.appendChild(card([
+    el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'💰 全社売上'),
+    el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',marginBottom:'12px'}},
+      statBox('総売上', fmt(totalAll), '#7B61FF'),
+      statBox('技術売上', fmt(gijutsuAll), '#5B8DEF'),
+      statBox('店販売上', fmt(shohinAll), '#3DBD8A')
+    ),
     el('div',{style:{height:'8px',background:'#F7F7F9',borderRadius:'4px',overflow:'hidden'}},
       el('div',{style:{height:'100%',width:`${Math.min(pctAll,100)}%`,background:'#7B61FF',borderRadius:'4px'}})
     ),
     el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginTop:'6px'}},`目標 ${fmt(targetAll)} — ${pctAll}%`)
-  ));
-  wrap.appendChild(storeGrid(id=>{currentStore=id;render();},(s,members)=>fmt(members.reduce((a,m)=>a+(SALES_DATA[m.pin]?.total||0),0))));
+  ]));
+
+  wrap.appendChild(storeGrid(id=>{currentStore=id;render();},(s,members)=>{
+    const t=members.reduce((a,m)=>a+(SALES_DATA[m.pin]?.total||0),0);
+    return fmt(t);
+  }));
   return wrap;
 }
 
-function renderAnalytics() {
+function renderEdu() {
   const wrap = el('div',{});
-  if (currentStaffPin) {
-    const member = STAFF.find(s=>s.pin===currentStaffPin);
+  const eduStores = [
+    { id:'honten', name:'Hair 本店', color:'#7B61FF' },
+    { id:'tuelu',  name:'tuelu',    color:'#5B8DEF' },
+  ];
+
+  if (currentEduPin) {
+    const member = EDU_STAFF.find(s=>s.pin===currentEduPin);
     const st = getStore(member.store);
-    const d = SALES_DATA[currentStaffPin]||{total:0,shinki:0,rairai:0,kotei:0};
-    const total = d.shinki+d.rairai+d.kotei;
-    const repeat = total>0?Math.round((d.rairai+d.kotei)/total*100):0;
-    const shopRate = total>0?Math.round((d.shohin||0)/d.total*100)||0:0;
+    const year  = currentEduMonth.getFullYear();
+    const month = currentEduMonth.getMonth();
+    const key   = `${currentEduPin}_${year}_${month}`;
+    if (!eduData[key]) eduData[key] = { lessons:{}, notes:{} };
+    const data = eduData[key];
+
     wrap.appendChild(breadcrumb([
-      {label:'← 店舗',onClick:()=>{currentStore=null;currentStaffPin=null;render();}},
-      {label:st.name,onClick:()=>{currentStaffPin=null;render();}},
+      {label:'← 教育',onClick:()=>{currentEduPin=null;currentStore=null;render();}},
       {label:member.name.split(' ')[0]}
     ]));
+
+    // 月切り替え
+    wrap.appendChild(el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}},
+      el('button',{style:{padding:'8px 16px',border:'1.5px solid #EBEBEF',borderRadius:'10px',background:'#fff',cursor:'pointer'},onclick:()=>{currentEduMonth=new Date(year,month-1,1);render();}},'◀'),
+      el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'18px'}},`${year}年${month+1}月`),
+      el('button',{style:{padding:'8px 16px',border:'1.5px solid #EBEBEF',borderRadius:'10px',background:'#fff',cursor:'pointer'},onclick:()=>{currentEduMonth=new Date(year,month+1,1);render();}},'▶')
+    ));
+
+    // カレンダー
+    const firstDay = new Date(year,month,1).getDay();
+    const daysInMonth = new Date(year,month+1,0).getDate();
+    const calGrid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'4px',marginBottom:'16px'}});
+    ['日','月','火','水','木','金','土'].forEach(d=>calGrid.appendChild(el('div',{style:{textAlign:'center',fontSize:'10px',color:'#A0A0B0',padding:'4px'}},d)));
+    for(let i=0;i<firstDay;i++) calGrid.appendChild(el('div',{}));
+    for(let d=1;d<=daysInMonth;d++){
+      const dkey=String(d);
+      const lesson=data.lessons[dkey];
+      const dayEl=el('div',{
+        style:{textAlign:'center',padding:'8px 4px',borderRadius:'8px',cursor:'pointer',border:'1.5px solid',
+          borderColor:lesson==='ok'?'#3DBD8A':lesson==='ng'?'#E8537A':'#EBEBEF',
+          background:lesson==='ok'?'#EDFBF4':lesson==='ng'?'#FFF0F4':'#fff',
+          fontSize:'12px',fontWeight:'600'
+        },
+        onclick:()=>{
+          if(!lesson){data.lessons[dkey]='ok';}
+          else if(lesson==='ok'){data.lessons[dkey]='ng';}
+          else{delete data.lessons[dkey];}
+          eduData[key]=data; saveEdu(eduData); render();
+        }
+      },
+        el('div',{style:{fontSize:'11px',color:'#A0A0B0'}},String(d)),
+        lesson==='ok'?el('div',{style:{fontSize:'14px'}},'✓'):lesson==='ng'?el('div',{style:{fontSize:'14px'}},'✗'):el('div',{style:{height:'14px'}})
+      );
+      calGrid.appendChild(dayEl);
+    }
     wrap.appendChild(card([
-      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px',paddingBottom:'10px',borderBottom:'1.5px solid #EBEBEF'}},'🔁 リピート率'),
-      el('div',{style:{display:'flex',alignItems:'baseline',gap:'4px',marginBottom:'8px'}},
-        el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'52px',color:'#7B61FF',lineHeight:'1'}},String(repeat)),
-        el('div',{style:{fontSize:'18px',color:'#7B61FF'}},'%')
-      ),
-      el('div',{style:{height:'10px',background:'#F7F7F9',borderRadius:'5px',overflow:'hidden'}},
-        el('div',{style:{height:'100%',width:`${repeat}%`,background:'linear-gradient(90deg,#7B61FF,#B39DFD)',borderRadius:'5px'}})
-      ),
-      el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginTop:'6px'}},repeat>=70?'✓ 優秀':'△ 改善中')
+      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'📅 レッスンカレンダー'),
+      el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginBottom:'8px'}},'タップ → ✓できた → ✗できなかった → 未入力'),
+      calGrid
     ]));
+
+    // メモ
+    const memoVal = data.notes['memo']||'';
+    const memoArea = el('textarea',{
+      style:{width:'100%',height:'100px',padding:'10px',border:'1.5px solid #EBEBEF',borderRadius:'10px',fontSize:'13px',resize:'vertical',boxSizing:'border-box'},
+      placeholder:'レッスン内容・気づきなど...'
+    });
+    memoArea.value = memoVal;
     wrap.appendChild(card([
-      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px',paddingBottom:'10px',borderBottom:'1.5px solid #EBEBEF'}},'🛍️ 店販購買率'),
-      el('div',{style:{display:'flex',alignItems:'baseline',gap:'4px'}},
-        el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'36px',color:'#3DBD8A'}},String(shopRate)),
-        el('div',{style:{fontSize:'18px',color:'#3DBD8A'}},'%')
-      ),
-      el('div',{style:{height:'10px',background:'#F7F7F9',borderRadius:'5px',overflow:'hidden',marginTop:'8px'}},
-        el('div',{style:{height:'100%',width:`${shopRate}%`,background:'linear-gradient(90deg,#3DBD8A,#7BE8C0)',borderRadius:'5px'}})
-      ),
-      el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginTop:'6px'}},shopRate>=35?'✓ 目標達成':`目標35% まで残り${35-shopRate}%`)
+      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'📝 メモ'),
+      memoArea,
+      el('button',{
+        style:{width:'100%',padding:'12px',background:st.color,color:'#fff',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',marginTop:'8px'},
+        onclick:()=>{data.notes['memo']=memoArea.value;eduData[key]=data;saveEdu(eduData);alert('保存しました！');}
+      },'メモを保存')
     ]));
+
     return wrap;
   }
+
   if (currentStore) {
     const st = getStore(currentStore);
-    const members = STAFF.filter(s=>s.store===currentStore);
-    wrap.appendChild(breadcrumb([{label:'← 店舗',onClick:()=>{currentStore=null;render();}},{label:st.name}]));
+    const members = EDU_STAFF.filter(s=>s.store===currentStore);
+    wrap.appendChild(breadcrumb([{label:'← 教育',onClick:()=>{currentStore=null;render();}},{label:st.name}]));
     const grid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px'}});
     members.forEach(m=>{
-      grid.appendChild(el('div',{style:{background:'#fff',border:'2px solid #EBEBEF',borderRadius:'14px',padding:'14px 8px',cursor:'pointer',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'},onclick:()=>{currentStaffPin=m.pin;render();}},
-        el('div',{style:{width:'44px',height:'44px',borderRadius:'50%',background:st.color+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'16px',fontWeight:'700',color:st.color}},m.av),
+      grid.appendChild(el('div',{
+        style:{background:'#fff',border:'2px solid #EBEBEF',borderRadius:'14px',padding:'14px 8px',cursor:'pointer',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'},
+        onclick:()=>{currentEduPin=m.pin;render();}
+      },
+        el('div',{style:{width:'44px',height:'44px',borderRadius:'50%',background:st.color+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'16px',fontWeight:'700',color:st.color}},m.name[0]),
         el('div',{style:{fontSize:'11px',fontWeight:'500',lineHeight:'1.4'}},m.name)
       ));
     });
     wrap.appendChild(grid);
     return wrap;
   }
-  wrap.appendChild(storeGrid(id=>{currentStore=id;render();}));
+
+  // 店舗選択（honten/tueluのみ）
+  wrap.appendChild(el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}},
+    ...eduStores.map(s=>el('div',{
+      style:{background:'#fff',border:`2px solid ${s.color}33`,borderRadius:'16px',padding:'24px 16px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'},
+      onclick:()=>{currentStore=s.id;render();}
+    },
+      el('div',{style:{fontSize:'16px',fontWeight:'700',color:s.color}},s.name),
+      el('div',{style:{fontSize:'10px',color:'#6B6B80'}},`${EDU_STAFF.filter(m=>m.store===s.id).length}名`)
+    ))
+  ));
   return wrap;
 }
 
@@ -562,19 +680,15 @@ function renderProfile() {
   ));
   wrap.appendChild(card([
     el('div',{style:{fontSize:'11px',color:'#A0A0B0',marginBottom:'12px'}},'個人売上実績'),
-    el('div',{style:{display:'flex',gap:'10px',marginBottom:'10px'}},
-      el('div',{style:{flex:'1',background:st.bg,borderRadius:'12px',padding:'14px',textAlign:'center'}},
-        el('div',{style:{fontSize:'10px',color:st.color,fontWeight:'700',marginBottom:'4px'}},'月次売上'),
-        el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'20px',color:st.color}},fmt(d.total))
-      ),
-      el('div',{style:{flex:'1',background:'#F7F7F9',borderRadius:'12px',padding:'14px',textAlign:'center'}},
-        el('div',{style:{fontSize:'10px',color:'#A0A0B0',fontWeight:'700',marginBottom:'4px'}},'達成率'),
-        el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'20px',color:pct>=100?'#3DBD8A':'#F5A623'}},`${pct}%`)
-      )
+    el('div',{style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',marginBottom:'10px'}},
+      statBox('総売上', fmt(d.total), st.color),
+      statBox('技術', fmt(d.gijutsu||0), '#7B61FF'),
+      statBox('店販', fmt(d.shohin||0), '#3DBD8A')
     ),
     el('div',{style:{height:'8px',background:'#F7F7F9',borderRadius:'4px',overflow:'hidden'}},
       el('div',{style:{height:'100%',width:`${Math.min(pct,100)}%`,background:pct>=100?'#3DBD8A':st.color,borderRadius:'4px'}})
-    )
+    ),
+    el('div',{style:{fontSize:'11px',color:pct>=100?'#3DBD8A':'#F5A623',fontWeight:'600',marginTop:'6px'}},`達成率 ${pct}%`)
   ]));
   ['📅 勤怠記録','📨 シフト希望提出','📢 お知らせ','⚙️ 設定'].forEach(label=>{
     wrap.appendChild(el('div',{style:{display:'flex',alignItems:'center',padding:'15px 18px',background:'#fff',border:'1px solid #EBEBEF',borderRadius:'14px',marginBottom:'8px',cursor:'pointer'}},
