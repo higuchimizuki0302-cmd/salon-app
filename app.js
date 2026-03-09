@@ -1,9 +1,9 @@
 const STORES = [
-  { id:"honten", name:"Hair 本店", icon:"✂️", color:"#7B61FF", bg:"#F3F0FF" },
-  { id:"tuelu",  name:"tuelu",    icon:"✂️", color:"#5B8DEF", bg:"#EFF4FF" },
-  { id:"nail",   name:"Nail",     icon:"💅", color:"#E8537A", bg:"#FFF0F4" },
-  { id:"eye",    name:"Eye",      icon:"👁️", color:"#3BAED4", bg:"#EFF9FF" },
-  { id:"esthe",  name:"Esthe",    icon:"✨", color:"#3DBD8A", bg:"#EDFBF4" },
+  { id:"honten", name:"Hair 本店", color:"#7B61FF", bg:"#F3F0FF" },
+  { id:"tuelu",  name:"tuelu",    color:"#5B8DEF", bg:"#EFF4FF" },
+  { id:"nail",   name:"Nail",     color:"#E8537A", bg:"#FFF0F4" },
+  { id:"eye",    name:"Eye",      color:"#3BAED4", bg:"#EFF9FF" },
+  { id:"esthe",  name:"Esthe",    color:"#3DBD8A", bg:"#EDFBF4" },
 ];
 
 const STAFF = [
@@ -123,7 +123,7 @@ function renderLogin() {
     }
   },
     el('option', { value:'' }, '店舗を選択'),
-    ...STORES.map(s => el('option', { value: s.id }, `${s.icon} ${s.name}`))
+    ...STORES.map(s => el('option', { value: s.id }, s.name))
   );
 
   const roleSel = el('select', {
@@ -208,7 +208,7 @@ function storeGrid(onClick, badge) {
     ...STORES.map(s => {
       const members = STAFF.filter(m => m.store === s.id);
       return el('div', { style: { background:'#fff', border:`2px solid ${s.color}33`, borderRadius:'16px', padding:'24px 16px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:'8px' }, onclick: () => onClick(s.id) },
-        el('div', { style: { fontSize:'15px', fontWeight:'700', color:s.color }}, s.name),
+        el('div', { style: { fontSize:'16px', fontWeight:'700', color:s.color }}, s.name),
         el('div', { style: { fontSize:'10px', color:'#6B6B80' }}, badge ? badge(s, members) : `${members.length}名`)
       );
     })
@@ -247,25 +247,23 @@ function renderDaily() {
 
     wrap.appendChild(breadcrumb([
       { label:'← 店舗', onClick: () => { currentStore = null; currentStaffId = null; render(); }},
-      { label:`${st.icon} ${st.name}`, onClick: () => { currentStaffId = null; render(); }},
+      { label:st.name, onClick: () => { currentStaffId = null; render(); }},
       { label: member.name.split(' ')[0] }
     ]));
 
-    // インスタ
-    const instaBar = el('div', { style: { height:'8px', background:'#F7F7F9', borderRadius:'4px', overflow:'hidden', marginTop:'8px' }},
-      el('div', { style: { height:'100%', width:`${Math.min(100,Math.round(d.instaCurrent/d.instaTarget*100))}%`, background:'linear-gradient(90deg,#7B61FF,#E8537A)', borderRadius:'4px' }})
-    );
-
+    const instaPct = Math.min(100, Math.round(d.instaCurrent/d.instaTarget*100));
     wrap.appendChild(card([
       el('div', { style: { fontSize:'11px', fontWeight:'700', color:'#6B6B80', marginBottom:'14px', paddingBottom:'10px', borderBottom:'1.5px solid #EBEBEF' }}, '📸 インスタ投稿数'),
       el('div', { style: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'10px' }},
         el('div', {}, el('div', { style: { fontSize:'11px', color:'#A0A0B0', marginBottom:'6px' }}, '今月の目標'), stepper(d.instaTarget, v => { d.instaTarget = v; })),
         el('div', {}, el('div', { style: { fontSize:'11px', color:'#A0A0B0', marginBottom:'6px' }}, '現在の投稿数'), stepper(d.instaCurrent, v => { d.instaCurrent = v; }))
       ),
-      instaBar
+      el('div', { style: { height:'8px', background:'#F7F7F9', borderRadius:'4px', overflow:'hidden' }},
+        el('div', { style: { height:'100%', width:`${instaPct}%`, background:'linear-gradient(90deg,#7B61FF,#E8537A)', borderRadius:'4px' }})
+      ),
+      el('div', { style: { fontSize:'11px', color:'#A0A0B0', marginTop:'6px', textAlign:'right' }}, `${d.instaCurrent} / ${d.instaTarget}件 — ${instaPct}%`)
     ]));
 
-    // 予約・新規
     wrap.appendChild(card([
       el('div', { style: { fontSize:'11px', fontWeight:'700', color:'#6B6B80', marginBottom:'14px', paddingBottom:'10px', borderBottom:'1.5px solid #EBEBEF' }}, '📅 予約・新規'),
       ...['残りの予約件数:remaining', '新規のお客様数:newClients'].map(s => {
@@ -277,7 +275,6 @@ function renderDaily() {
       })
     ]));
 
-    // 流入経路
     wrap.appendChild(card([
       el('div', { style: { fontSize:'11px', fontWeight:'700', color:'#6B6B80', marginBottom:'14px', paddingBottom:'10px', borderBottom:'1.5px solid #EBEBEF' }}, '🔀 新規 流入経路'),
       el('div', { style: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px' }},
@@ -305,7 +302,7 @@ function renderDaily() {
   if (currentStore) {
     const st = getStore(currentStore);
     const members = STAFF.filter(s => s.store === currentStore);
-    wrap.appendChild(breadcrumb([{ label:'← 店舗', onClick: () => { currentStore = null; render(); }}, { label:`${st.icon} ${st.name}` }]));
+    wrap.appendChild(breadcrumb([{ label:'← 店舗', onClick: () => { currentStore = null; render(); }}, { label:st.name }]));
     const grid = el('div', { style: { display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:'10px' }});
     members.forEach(m => {
       const d = dailyData[m.id];
@@ -341,7 +338,7 @@ function renderSales() {
 
     wrap.appendChild(breadcrumb([
       { label:'← 店舗', onClick:()=>{currentStore=null;currentStaffId=null;render();}},
-      { label:`${st.icon} ${st.name}`, onClick:()=>{currentStaffId=null;render();}},
+      { label:st.name, onClick:()=>{currentStaffId=null;render();}},
       { label:member.name.split(' ')[0] }
     ]));
 
@@ -384,7 +381,7 @@ function renderSales() {
   if (currentStore) {
     const st = getStore(currentStore);
     const members = STAFF.filter(s => s.store === currentStore);
-    wrap.appendChild(breadcrumb([{label:'← 店舗',onClick:()=>{currentStore=null;render();}},{label:`${st.icon} ${st.name}`}]));
+    wrap.appendChild(breadcrumb([{label:'← 店舗',onClick:()=>{currentStore=null;render();}},{label:st.name}]));
     const list = el('div',{style:{background:'#fff',border:'1px solid #EBEBEF',borderRadius:'16px',overflow:'hidden'}});
     members.forEach(m => {
       const d = SALES_DATA[m.id];
@@ -434,7 +431,7 @@ function renderAnalytics() {
     const shopRate = seed(currentStaffId,15,55);
     wrap.appendChild(breadcrumb([
       {label:'← 店舗',onClick:()=>{currentStore=null;currentStaffId=null;render();}},
-      {label:`${st.icon} ${st.name}`,onClick:()=>{currentStaffId=null;render();}},
+      {label:st.name,onClick:()=>{currentStaffId=null;render();}},
       {label:member.name.split(' ')[0]}
     ]));
     wrap.appendChild(card([
@@ -463,7 +460,7 @@ function renderAnalytics() {
   if (currentStore) {
     const st = getStore(currentStore);
     const members = STAFF.filter(s=>s.store===currentStore);
-    wrap.appendChild(breadcrumb([{label:'← 店舗',onClick:()=>{currentStore=null;render();}},{label:`${st.icon} ${st.name}`}]));
+    wrap.appendChild(breadcrumb([{label:'← 店舗',onClick:()=>{currentStore=null;render();}},{label:st.name}]));
     const grid = el('div',{style:{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'10px'}});
     members.forEach(m=>{
       grid.appendChild(el('div',{style:{background:'#fff',border:'2px solid #EBEBEF',borderRadius:'14px',padding:'14px 8px',cursor:'pointer',textAlign:'center',display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'},onclick:()=>{currentStaffId=m.id;render();}},
@@ -493,7 +490,7 @@ function renderShift() {
   if (currentStore) {
     const st = getStore(currentStore);
     const shifts = genShifts(currentStore);
-    wrap.appendChild(breadcrumb([{label:'← 店舗一覧',onClick:()=>{currentStore=null;render();}},{label:`${st.icon} ${st.name}`}]));
+    wrap.appendChild(breadcrumb([{label:'← 店舗一覧',onClick:()=>{currentStore=null;render();}},{label:st.name}]));
     const dateRow = el('div',{style:{display:'flex',gap:'8px',marginBottom:'14px',overflowX:'auto'}});
     dates.forEach(d=>{
       dateRow.appendChild(el('div',{style:{flexShrink:'0',width:'50px',padding:'10px 0',textAlign:'center',border:`1.5px solid ${d.active?'#7B61FF':'#EBEBEF'}`,borderRadius:'12px',background:d.active?'#7B61FF':'#fff',color:d.active?'#fff':'#1A1A2E',cursor:'pointer'}},
