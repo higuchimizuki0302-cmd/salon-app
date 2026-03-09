@@ -1,11 +1,9 @@
 const STORES = [
- const STORES = [
-  { id:"honten", name:"Hair 本店", icon:"", color:"#7B61FF", bg:"#F3F0FF" },
-  { id:"tuelu",  name:"tuelu",    icon:"", color:"#5B8DEF", bg:"#EFF4FF" },
-  { id:"nail",   name:"Nail",     icon:"", color:"#E8537A", bg:"#FFF0F4" },
-  { id:"eye",    name:"Eye",      icon:"", color:"#3BAED4", bg:"#EFF9FF" },
-  { id:"esthe",  name:"Esthe",    icon:"", color:"#3DBD8A", bg:"#EDFBF4" },
-];
+  { id:"honten", name:"Hair 本店", icon:"✂️", color:"#7B61FF", bg:"#F3F0FF" },
+  { id:"tuelu",  name:"tuelu",    icon:"✂️", color:"#5B8DEF", bg:"#EFF4FF" },
+  { id:"nail",   name:"Nail",     icon:"💅", color:"#E8537A", bg:"#FFF0F4" },
+  { id:"eye",    name:"Eye",      icon:"👁️", color:"#3BAED4", bg:"#EFF9FF" },
+  { id:"esthe",  name:"Esthe",    icon:"✨", color:"#3DBD8A", bg:"#EDFBF4" },
 ];
 
 const STAFF = [
