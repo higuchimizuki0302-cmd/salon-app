@@ -2,67 +2,13 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SALON HQ｜南船場グループ</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>diptyMOILA</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Noto+Sans+JP:wght@300;400;500;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-  <!-- ログイン画面 -->
-  <div id="login-screen" class="login-screen">
-    <div class="login-box">
-      <div class="login-logo">SALON HQ</div>
-      <div class="login-sub">南船場グループ 管理システム</div>
-      <input type="text" id="login-name" placeholder="お名前を入力" class="login-input">
-      <select id="login-store" class="login-input">
-        <option value="">店舗を選択</option>
-        <option value="Hair Salon A">Hair Salon A</option>
-        <option value="Hair Salon B">Hair Salon B</option>
-        <option value="Eye Salon">Eye Salon</option>
-        <option value="Nail Salon">Nail Salon</option>
-        <option value="Esthe Salon">Esthe Salon</option>
-      </select>
-      <select id="login-role" class="login-input">
-        <option value="staff">スタッフ</option>
-        <option value="manager">店長</option>
-        <option value="owner">オーナー</option>
-      </select>
-      <button onclick="doLogin()" class="login-btn">ログイン</button>
-    </div>
-  </div>
-
-  <!-- メインアプリ -->
-  <div id="app" class="app" style="display:none">
-
-    <!-- サイドバー -->
-    <aside class="sidebar">
-      <div class="sidebar-logo">
-        <div class="logo-en">SALON HQ</div>
-        <div class="logo-ja">南船場グループ</div>
-      </div>
-      <nav class="sidebar-nav">
-        <div class="nav-item active" onclick="showPage('sales', this)">📊 売上管理</div>
-        <div class="nav-item" onclick="showPage('targets', this)">🎯 目標管理</div>
-        <div class="nav-item" onclick="showPage('shift', this)">📅 シフト管理</div>
-      </nav>
-      <div class="sidebar-user">
-        <div id="user-name-display"></div>
-        <div id="user-store-display"></div>
-        <button onclick="doLogout()" class="logout-btn">ログアウト</button>
-      </div>
-    </aside>
-
-    <!-- メインコンテンツ -->
-    <main class="main">
-      <div class="topbar">
-        <div class="topbar-title" id="page-title">売上管理</div>
-        <div class="topbar-meta" id="today-date"></div>
-      </div>
-      <div class="content" id="main-content"></div>
-    </main>
-
-  </div>
-
+  <div id="root"></div>
   <script src="app.js"></script>
 </body>
 </html>
