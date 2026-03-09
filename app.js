@@ -1,3 +1,29 @@
+const SUPABASE_URL = 'https://kwunnrtmokhpobwmqxgd.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3dW5ucnRtb2tocG9id21xeGdkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI1MTY5ODgsImV4cCI6MjA4ODA5Mjk4OH0.DEaKGoQGosUzMdqw1ehzq3JsKlMXG8STlKRJLhw412E';
+
+const sb = {
+  async get(table, key, col='pin') {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(key)}&limit=1`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+    const data = await res.json();
+    return data[0] || null;
+  },
+  async upsert(table, row) {
+    await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify(row)
+    });
+  },
+  async getAll(table) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+    });
+    return await res.json();
+  }
+};
+
 const STORES = [
   { id:"honten", name:"Hair 本店", color:"#7B61FF", bg:"#F3F0FF" },
   { id:"tuelu",  name:"tuelu",    color:"#5B8DEF", bg:"#EFF4FF" },
@@ -48,28 +74,17 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const today = new Date();
 const todayStr = `${today.getFullYear()}年${today.getMonth()+1}月${today.getDate()}日（${DOW[today.getDay()]}）`;
 
-const STORAGE_SALES = 'diptyMOILA_sales';
-const STORAGE_DAILY = 'diptyMOILA_daily';
-const STORAGE_EDU   = 'diptyMOILA_edu';
-
 const defaultSales = () => {
   const d = {};
   STAFF.forEach(s => { d[s.pin] = { total:0, gijutsu:0, shohin:0, gijutsu_clients:0, shohin_clients:0, shinki:0, rairai:0, kotei:0, gobusata:0, target:500000 }; });
   return d;
 };
-const loadSales = () => { try { const s = localStorage.getItem(STORAGE_SALES); if(s) return JSON.parse(s); } catch(e){} return defaultSales(); };
-const saveSales = d => { try { localStorage.setItem(STORAGE_SALES, JSON.stringify(d)); } catch(e){} };
 
 const genDailyDefault = () => {
   const d = {};
   STAFF.forEach(s => { d[s.pin] = { instaTarget:20, instaCurrent:0, remaining:0, newClients:0, hotpepper:0, instagram:0, referral:0, lp:0, saved:false }; });
   return d;
 };
-const loadDaily = () => { try { const s = localStorage.getItem(STORAGE_DAILY); if(s) return JSON.parse(s); } catch(e){} return genDailyDefault(); };
-const saveDaily = d => { try { localStorage.setItem(STORAGE_DAILY, JSON.stringify(d)); } catch(e){} };
-
-const loadEdu = () => { try { const s = localStorage.getItem(STORAGE_EDU); if(s) return JSON.parse(s); } catch(e){} return {}; };
-const saveEdu = d => { try { localStorage.setItem(STORAGE_EDU, JSON.stringify(d)); } catch(e){} };
 
 const parseCSVData = (text) => {
   const lines = text.split('\n');
@@ -89,16 +104,15 @@ const parseCSVData = (text) => {
         newData[currentPin].gijutsu_clients=q(7)+q(9); newData[currentPin].shohin_clients=q(8)+q(10);
         newData[currentPin].shinki=q(13); newData[currentPin].rairai=q(14); newData[currentPin].kotei=q(15); newData[currentPin].gobusata=q(16)||0;
       }
-      const ex=loadSales(); if(ex[currentPin]?.target) newData[currentPin].target=ex[currentPin].target;
       currentPin=null; qtyRow=null;
     }
   });
   return newData;
 };
 
-let SALES_DATA = loadSales();
-let dailyData  = loadDaily();
-let eduData    = loadEdu();
+let SALES_DATA = defaultSales();
+let dailyData  = genDailyDefault();
+let eduData    = {};
 let currentUser = null;
 let currentTab = 'daily';
 let currentStore = null;
@@ -106,7 +120,21 @@ let currentStaffPin = null;
 let currentEduPin = null;
 let currentEduMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 let showAddLesson = false;
-let selectedDate = null;
+
+async function loadAllData() {
+  try {
+    const sales = await sb.getAll('sales_data');
+    sales.forEach(row => {
+      if (SALES_DATA[row.pin]) {
+        SALES_DATA[row.pin] = { ...SALES_DATA[row.pin], ...row };
+      }
+    });
+    const daily = await sb.getAll('daily_data');
+    daily.forEach(row => { if(row.pin) dailyData[row.pin] = { ...genDailyDefault()[row.pin], ...row.data }; });
+    const edu = await sb.getAll('edu_data');
+    edu.forEach(row => { eduData[row.month_key] = { lessons: row.lessons || [] }; });
+  } catch(e) { console.log('load error', e); }
+}
 
 function el(tag, props, ...children) {
   const e = document.createElement(tag);
@@ -149,10 +177,17 @@ function renderLogin() {
   });
   box.appendChild(keypad);
   box.appendChild(el('button',{style:{width:'100%',padding:'14px',background:'#7B61FF',color:'#fff',border:'none',borderRadius:'10px',fontSize:'14px',fontWeight:'700',cursor:'pointer'},
-    onclick:()=>{
+    onclick:async()=>{
       const found=STAFF.find(s=>s.pin===pinInput);
-      if(found){currentUser=found;render();}
-      else{errMsg.textContent='IDが正しくありません';pinInput='';display.textContent='—';}
+      if(found){
+        currentUser=found;
+        await loadAllData();
+        render();
+      } else {
+        errMsg.textContent='IDが正しくありません';
+        pinInput='';
+        display.textContent='—';
+      }
     }},'ログイン'));
   wrap.appendChild(box); return wrap;
 }
@@ -177,7 +212,7 @@ function renderApp() {
   const nav=el('nav',{style:{display:'flex',background:'#fff',borderTop:'1px solid #EBEBEF',position:'fixed',bottom:'0',left:'50%',transform:'translateX(-50%)',width:'100%',maxWidth:'430px',zIndex:'100'}});
   TABS.forEach(t=>nav.appendChild(el('button',{
     style:{flex:'1',padding:'10px 2px 8px',display:'flex',flexDirection:'column',alignItems:'center',gap:'3px',cursor:'pointer',border:'none',background:'none',color:currentTab===t.key?'#7B61FF':'#A0A0B0',fontSize:'7.5px',borderTop:`2.5px solid ${currentTab===t.key?'#7B61FF':'transparent'}`},
-    onclick:()=>{currentTab=t.key;currentStore=null;currentStaffPin=null;currentEduPin=null;showAddLesson=false;selectedDate=null;render();}
+    onclick:()=>{currentTab=t.key;currentStore=null;currentStaffPin=null;currentEduPin=null;showAddLesson=false;render();}
   },el('span',{style:{fontSize:'18px'}},t.icon),t.label)));
   return el('div',{style:{display:'flex',flexDirection:'column',minHeight:'100vh',maxWidth:'430px',margin:'0 auto',background:'#F7F7F9'}},
     el('div',{style:{padding:'16px 20px 12px',background:'#fff',borderBottom:'1px solid #EBEBEF',position:'sticky',top:'0',zIndex:'100'}},
@@ -267,7 +302,15 @@ function renderDaily(){
         })
       )
     ]));
-    wrap.appendChild(el('button',{style:{width:'100%',padding:'15px',border:'none',borderRadius:'14px',background:st.color,color:'#fff',fontSize:'14px',fontWeight:'700',cursor:'pointer'},onclick:()=>{d.saved=true;dailyData[currentStaffPin]=d;saveDaily(dailyData);currentStaffPin=null;render();}},'入力を保存する'));
+    wrap.appendChild(el('button',{
+      style:{width:'100%',padding:'15px',border:'none',borderRadius:'14px',background:st.color,color:'#fff',fontSize:'14px',fontWeight:'700',cursor:'pointer'},
+      onclick:async()=>{
+        d.saved=true;
+        dailyData[currentStaffPin]=d;
+        await sb.upsert('daily_data',{pin:currentStaffPin,data:d,updated_at:new Date().toISOString()});
+        currentStaffPin=null; render();
+      }
+    },'入力を保存する'));
     return wrap;
   }
   if(currentStore){
@@ -294,10 +337,14 @@ function renderSales(){
   wrap.appendChild(card([
     el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px',paddingBottom:'10px',borderBottom:'1.5px solid #EBEBEF'}},'📂 POSデータ取り込み'),
     el('textarea',{style:{width:'100%',height:'100px',padding:'10px',border:'1.5px solid #EBEBEF',borderRadius:'10px',fontSize:'11px',resize:'vertical',fontFamily:'monospace',boxSizing:'border-box'},placeholder:'ここにCSVデータを貼り付け...',id:'csv-input'}),
-    el('button',{style:{width:'100%',padding:'12px',background:'#7B61FF',color:'#fff',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',marginTop:'8px'},onclick:()=>{
+    el('button',{style:{width:'100%',padding:'12px',background:'#7B61FF',color:'#fff',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer',marginTop:'8px'},onclick:async()=>{
       const text=document.getElementById('csv-input').value;
       if(!text.trim()) return;
-      SALES_DATA=parseCSVData(text); saveSales(SALES_DATA);
+      const newData=parseCSVData(text);
+      SALES_DATA=newData;
+      for(const pin of Object.keys(newData)){
+        await sb.upsert('sales_data',{pin,...newData[pin],updated_at:new Date().toISOString()});
+      }
       document.getElementById('csv-input').value='';
       alert('✓ データを取り込みました！'); render();
     }},'取り込む')
@@ -351,15 +398,11 @@ function renderSales(){
 function renderEdu(){
   const wrap=el('div',{});
   const isEduStaff=EDU_STAFF.find(s=>s.pin===currentUser.pin);
-
-  // アシスタント本人 → 自分のページへ直行
-  if(isEduStaff && !currentEduPin){
-    currentEduPin=currentUser.pin;
-  }
+  if(isEduStaff && !currentEduPin) currentEduPin=currentUser.pin;
 
   if(currentEduPin){
     const member=EDU_STAFF.find(s=>s.pin===currentEduPin);
-    if(!member){ currentEduPin=null; render(); return wrap; }
+    if(!member){currentEduPin=null;render();return wrap;}
     const st=getStore(member.store);
     const isOwn=currentUser.pin===currentEduPin;
     const year=currentEduMonth.getFullYear();
@@ -368,18 +411,14 @@ function renderEdu(){
     if(!eduData[monthKey]) eduData[monthKey]={lessons:[]};
     const data=eduData[monthKey];
 
-    const backBtn = isEduStaff ? null : {label:'← 教育',onClick:()=>{currentEduPin=null;render();}};
-    const crumbs=[{label:'← 教育',onClick:()=>{currentEduPin=null;render();}},{label:member.name}];
-    if(!isEduStaff) wrap.appendChild(breadcrumb(crumbs));
+    if(!isEduStaff) wrap.appendChild(breadcrumb([{label:'← 教育',onClick:()=>{currentEduPin=null;render();}},{label:member.name}]));
 
-    // 月切り替え
     wrap.appendChild(el('div',{style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}},
       el('button',{style:{padding:'8px 16px',border:'1.5px solid #EBEBEF',borderRadius:'10px',background:'#fff',cursor:'pointer'},onclick:()=>{currentEduMonth=new Date(year,month-1,1);render();}},'◀'),
       el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'18px'}},`${year}年${month+1}月`),
       el('button',{style:{padding:'8px 16px',border:'1.5px solid #EBEBEF',borderRadius:'10px',background:'#fff',cursor:'pointer'},onclick:()=>{currentEduMonth=new Date(year,month+1,1);render();}},'▶')
     ));
 
-    // カレンダー（レッスンがある日にドット）
     const firstDay=new Date(year,month,1).getDay();
     const daysInMonth=new Date(year,month+1,0).getDate();
     const calGrid=el('div',{style:{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:'4px',marginBottom:'16px'}});
@@ -388,22 +427,13 @@ function renderEdu(){
     for(let d=1;d<=daysInMonth;d++){
       const hasLesson=data.lessons.some(l=>l.date===d);
       const isToday=d===today.getDate()&&month===today.getMonth()&&year===today.getFullYear();
-      calGrid.appendChild(el('div',{style:{textAlign:'center',padding:'6px 2px',borderRadius:'8px',fontSize:'12px',fontWeight:isToday?'700':'400',background:isToday?'#7B61FF22':'transparent',color:isToday?'#7B61FF':'#1A1A2E',position:'relative',cursor:'pointer'},
-        onclick:()=>{
-          const el2=document.getElementById('lesson-list');
-          if(el2) el2.scrollIntoView({behavior:'smooth'});
-        }
-      },
+      calGrid.appendChild(el('div',{style:{textAlign:'center',padding:'6px 2px',borderRadius:'8px',fontSize:'12px',fontWeight:isToday?'700':'400',background:isToday?'#7B61FF22':'transparent',color:isToday?'#7B61FF':'#1A1A2E',position:'relative',cursor:'pointer'}},
         String(d),
         hasLesson?el('div',{style:{width:'5px',height:'5px',borderRadius:'50%',background:'#7B61FF',margin:'2px auto 0'}}):null
       ));
     }
-    wrap.appendChild(card([
-      el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'📅 カレンダー'),
-      calGrid
-    ]));
+    wrap.appendChild(card([el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'📅 カレンダー'),calGrid]));
 
-    // レッスン追加ボタン（本人のみ）
     if(isOwn){
       wrap.appendChild(el('button',{
         style:{width:'100%',padding:'14px',border:'2px dashed #7B61FF55',borderRadius:'14px',background:'#F3F0FF',color:'#7B61FF',fontSize:'14px',fontWeight:'600',cursor:'pointer',marginBottom:'12px'},
@@ -411,20 +441,21 @@ function renderEdu(){
       },'＋ レッスンを追加'));
 
       if(showAddLesson){
-        let newTitle='', newSub='', newDate=today.getDate();
+        let newTitle='',newSub='',newDate=today.getDate();
         const titleInput=el('input',{style:{width:'100%',padding:'10px',border:'1.5px solid #EBEBEF',borderRadius:'10px',fontSize:'13px',marginBottom:'8px',boxSizing:'border-box'},placeholder:'レッスン名（例：シャンプー練習）',oninput:e=>{newTitle=e.target.value;}});
         const subInput=el('input',{style:{width:'100%',padding:'10px',border:'1.5px solid #EBEBEF',borderRadius:'10px',fontSize:'13px',marginBottom:'8px',boxSizing:'border-box'},placeholder:'サブタイトル（例：泡立て・すすぎ）',oninput:e=>{newSub=e.target.value;}});
         const dateInput=el('input',{type:'number',min:'1',max:String(daysInMonth),style:{width:'100%',padding:'10px',border:'1.5px solid #EBEBEF',borderRadius:'10px',fontSize:'13px',marginBottom:'8px',boxSizing:'border-box'},placeholder:`日付（1〜${daysInMonth}）`,oninput:e=>{newDate=parseInt(e.target.value)||today.getDate();}});
         wrap.appendChild(card([
           el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px'}},'📝 新しいレッスン'),
-          titleInput, subInput, dateInput,
+          titleInput,subInput,dateInput,
           el('button',{
             style:{width:'100%',padding:'12px',background:'#7B61FF',color:'#fff',border:'none',borderRadius:'10px',fontSize:'13px',fontWeight:'700',cursor:'pointer'},
-            onclick:()=>{
+            onclick:async()=>{
               if(!newTitle.trim()) return;
               data.lessons.push({id:Date.now(),date:newDate,title:newTitle,sub:newSub,result:null,memo:''});
               data.lessons.sort((a,b)=>a.date-b.date);
-              eduData[monthKey]=data; saveEdu(eduData);
+              eduData[monthKey]=data;
+              await sb.upsert('edu_data',{month_key:monthKey,lessons:data.lessons,updated_at:new Date().toISOString()});
               showAddLesson=false; render();
             }
           },'追加する')
@@ -432,15 +463,13 @@ function renderEdu(){
       }
     }
 
-    // レッスン一覧
-    const listDiv=el('div',{id:'lesson-list'});
+    const listDiv=el('div',{});
     if(data.lessons.length===0){
       listDiv.appendChild(el('div',{style:{textAlign:'center',color:'#A0A0B0',fontSize:'13px',padding:'24px'}},'レッスンがまだありません'));
     } else {
       data.lessons.forEach((lesson,idx)=>{
-        const lessonCard=el('div',{style:{background:'#fff',border:'1px solid #EBEBEF',borderRadius:'16px',padding:'16px',marginBottom:'12px'}});
-        // ヘッダー
-        lessonCard.appendChild(el('div',{style:{display:'flex',alignItems:'flex-start',gap:'12px',marginBottom:'12px'}},
+        const lCard=el('div',{style:{background:'#fff',border:'1px solid #EBEBEF',borderRadius:'16px',padding:'16px',marginBottom:'12px'}});
+        lCard.appendChild(el('div',{style:{display:'flex',alignItems:'flex-start',gap:'12px',marginBottom:'12px'}},
           el('div',{style:{background:'#7B61FF22',borderRadius:'10px',padding:'8px 10px',textAlign:'center',minWidth:'44px'}},
             el('div',{style:{fontSize:'10px',color:'#7B61FF',fontWeight:'600'}},MONTHS[month]),
             el('div',{style:{fontFamily:'"DM Serif Display",serif',fontSize:'22px',color:'#7B61FF',lineHeight:'1'}},String(lesson.date))
@@ -449,27 +478,36 @@ function renderEdu(){
             el('div',{style:{fontSize:'14px',fontWeight:'700',marginBottom:'2px'}},lesson.title),
             lesson.sub?el('div',{style:{fontSize:'12px',color:'#A0A0B0'}},lesson.sub):null
           ),
-          isOwn?el('button',{style:{background:'none',border:'none',color:'#E8537A',cursor:'pointer',fontSize:'18px',padding:'0'},onclick:()=>{
-            data.lessons.splice(idx,1); eduData[monthKey]=data; saveEdu(eduData); render();
+          isOwn?el('button',{style:{background:'none',border:'none',color:'#E8537A',cursor:'pointer',fontSize:'18px',padding:'0'},onclick:async()=>{
+            data.lessons.splice(idx,1);
+            eduData[monthKey]=data;
+            await sb.upsert('edu_data',{month_key:monthKey,lessons:data.lessons,updated_at:new Date().toISOString()});
+            render();
           }},'×'):null
         ));
-        // できた/できなかった（本人のみ編集可）
-        const okStyle=(active)=>({padding:'8px 18px',borderRadius:'20px',border:`1.5px solid ${active?'#3DBD8A':'#EBEBEF'}`,background:active?'#EDFBF4':'#fff',color:active?'#3DBD8A':'#A0A0B0',cursor:'pointer',fontSize:'13px',fontWeight:'600'});
-        const ngStyle=(active)=>({padding:'8px 18px',borderRadius:'20px',border:`1.5px solid ${active?'#E8537A':'#EBEBEF'}`,background:active?'#FFF0F4':'#fff',color:active?'#E8537A':'#A0A0B0',cursor:'pointer',fontSize:'13px',fontWeight:'600'});
-        const btnRow=el('div',{style:{display:'flex',gap:'10px',marginBottom:'10px'}},
-          el('button',{style:okStyle(lesson.result==='ok'),onclick:isOwn?()=>{lesson.result=lesson.result==='ok'?null:'ok';eduData[monthKey]=data;saveEdu(eduData);render();}:null},'✓ できた'),
-          el('button',{style:ngStyle(lesson.result==='ng'),onclick:isOwn?()=>{lesson.result=lesson.result==='ng'?null:'ng';eduData[monthKey]=data;saveEdu(eduData);render();}:null},'✗ できなかった')
-        );
-        lessonCard.appendChild(btnRow);
-        // メモ
+        const okStyle=(active)=>({padding:'8px 18px',borderRadius:'20px',border:`1.5px solid ${active?'#3DBD8A':'#EBEBEF'}`,background:active?'#EDFBF4':'#fff',color:active?'#3DBD8A':'#A0A0B0',cursor:isOwn?'pointer':'default',fontSize:'13px',fontWeight:'600'});
+        const ngStyle=(active)=>({padding:'8px 18px',borderRadius:'20px',border:`1.5px solid ${active?'#E8537A':'#EBEBEF'}`,background:active?'#FFF0F4':'#fff',color:active?'#E8537A':'#A0A0B0',cursor:isOwn?'pointer':'default',fontSize:'13px',fontWeight:'600'});
+        lCard.appendChild(el('div',{style:{display:'flex',gap:'10px',marginBottom:'10px'}},
+          el('button',{style:okStyle(lesson.result==='ok'),onclick:isOwn?async()=>{lesson.result=lesson.result==='ok'?null:'ok';eduData[monthKey]=data;await sb.upsert('edu_data',{month_key:monthKey,lessons:data.lessons,updated_at:new Date().toISOString()});render();}:null},'✓ できた'),
+          el('button',{style:ngStyle(lesson.result==='ng'),onclick:isOwn?async()=>{lesson.result=lesson.result==='ng'?null:'ng';eduData[monthKey]=data;await sb.upsert('edu_data',{month_key:monthKey,lessons:data.lessons,updated_at:new Date().toISOString()});render();}:null},'✗ できなかった')
+        ));
         if(isOwn){
-          const memoInput=el('textarea',{style:{width:'100%',padding:'10px',border:'1.5px solid #EBEBEF',borderRadius:'10px',fontSize:'12px',resize:'none',height:'70px',boxSizing:'border-box'},placeholder:'コメントを入力...',oninput:e=>{lesson.memo=e.target.value;eduData[monthKey]=data;saveEdu(eduData);}});
+          const memoInput=el('textarea',{style:{width:'100%',padding:'10px',border:'1.5px solid #EBEBEF',borderRadius:'10px',fontSize:'12px',resize:'none',height:'70px',boxSizing:'border-box'},placeholder:'コメントを入力...'});
           memoInput.value=lesson.memo||'';
-          lessonCard.appendChild(memoInput);
+          let saveTimer=null;
+          memoInput.oninput=e=>{
+            lesson.memo=e.target.value;
+            clearTimeout(saveTimer);
+            saveTimer=setTimeout(async()=>{
+              eduData[monthKey]=data;
+              await sb.upsert('edu_data',{month_key:monthKey,lessons:data.lessons,updated_at:new Date().toISOString()});
+            },1000);
+          };
+          lCard.appendChild(memoInput);
         } else if(lesson.memo){
-          lessonCard.appendChild(el('div',{style:{background:'#F7F7F9',borderRadius:'10px',padding:'10px',fontSize:'12px',color:'#6B6B80'}},lesson.memo));
+          lCard.appendChild(el('div',{style:{background:'#F7F7F9',borderRadius:'10px',padding:'10px',fontSize:'12px',color:'#6B6B80'}},lesson.memo));
         }
-        listDiv.appendChild(lessonCard);
+        listDiv.appendChild(lCard);
       });
     }
     wrap.appendChild(el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'10px'}},'📋 スケジュール一覧'));
@@ -477,7 +515,6 @@ function renderEdu(){
     return wrap;
   }
 
-  // 店舗選択 → スタッフ選択
   const eduStores=[{id:'honten',name:'Hair 本店',color:'#7B61FF'},{id:'tuelu',name:'tuelu',color:'#5B8DEF'}];
   if(currentStore){
     const st=getStore(currentStore);
