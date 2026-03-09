@@ -207,9 +207,8 @@ function storeGrid(onClick, badge) {
   return el('div', { style: { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'10px', marginBottom:'16px' }},
     ...STORES.map(s => {
       const members = STAFF.filter(m => m.store === s.id);
-      return el('div', { style: { background:'#fff', border:`2px solid ${s.color}33`, borderRadius:'16px', padding:'18px 16px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:'8px' }, onclick: () => onClick(s.id) },
-        background:s.bg, display:'flex', alignItems:'center', justifyContent:'center', fontSize:'24px' }}, s.icon),
-        el('div', { style: { fontSize:'13px', fontWeight:'700', color:s.color }}, s.name),
+      return el('div', { style: { background:'#fff', border:`2px solid ${s.color}33`, borderRadius:'16px', padding:'24px 16px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:'8px' }, onclick: () => onClick(s.id) },
+        el('div', { style: { fontSize:'15px', fontWeight:'700', color:s.color }}, s.name),
         el('div', { style: { fontSize:'10px', color:'#6B6B80' }}, badge ? badge(s, members) : `${members.length}名`)
       );
     })
