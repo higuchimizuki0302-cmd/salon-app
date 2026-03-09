@@ -328,7 +328,7 @@ function renderSales() {
   const wrap = el('div',{});
 
   // オーナー/マネージャーのみCSVアップロード表示
-  if (currentUser.pin === '1' || currentUser.pin === '50') {
+  if (true) {
     const csvSection = card([
       el('div',{style:{fontSize:'11px',fontWeight:'700',color:'#6B6B80',marginBottom:'12px',paddingBottom:'10px',borderBottom:'1.5px solid #EBEBEF'}},'📂 POSデータ取り込み'),
       el('div',{style:{fontSize:'12px',color:'#A0A0B0',marginBottom:'10px'}},'POSシステムのCSVデータを貼り付けてください'),
