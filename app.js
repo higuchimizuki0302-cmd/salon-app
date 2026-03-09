@@ -1,9 +1,10 @@
 const STORES = [
-  { id:"honten", name:"Hair 本店", icon:"✂️", color:"#7B61FF", bg:"#F3F0FF" },
-  { id:"tuelu",  name:"tuelu",    icon:"✂️", color:"#5B8DEF", bg:"#EFF4FF" },
-  { id:"nail",   name:"Nail",     icon:"💅", color:"#E8537A", bg:"#FFF0F4" },
-  { id:"eye",    name:"Eye",      icon:"👁️", color:"#3BAED4", bg:"#EFF9FF" },
-  { id:"esthe",  name:"Esthe",    icon:"✨", color:"#3DBD8A", bg:"#EDFBF4" },
+  { id:"honten", name:"Hair 本店", icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M6 3c0 0 1 1 1 4s-2 4-2 7c0 2.5 1.5 4 3 4s2-1 4-1 2.5 1 4 1 3-1.5 3-4c0-3-2-4-2-7s1-4 1-4M6 3h12"/></svg>`, color:"#7B61FF", bg:"#F3F0FF" },
+  { id:"tuelu",  name:"tuelu",    icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M6 3c0 0 1 1 1 4s-2 4-2 7c0 2.5 1.5 4 3 4s2-1 4-1 2.5 1 4 1 3-1.5 3-4c0-3-2-4-2-7s1-4 1-4M6 3h12"/></svg>`, color:"#5B8DEF", bg:"#EFF4FF" },
+  { id:"nail",   name:"Nail",     icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M12 3c-3 0-5 2-5 5v8a5 5 0 0010 0V8c0-3-2-5-5-5z"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>`, color:"#E8537A", bg:"#FFF0F4" },
+  { id:"eye",    name:"Eye",      icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>`, color:"#3BAED4", bg:"#EFF9FF" },
+  { id:"esthe",  name:"Esthe",    icon:`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="24" height="24"><path d="M12 3l1.5 4.5H18l-3.75 2.75L15.75 15 12 12.25 8.25 15l1.5-4.75L6 7.5h4.5z"/><path d="M12 15v6M9 18h6"/></svg>`, color:"#3DBD8A", bg:"#EDFBF4" },
+
 ];
 
 const STAFF = [
